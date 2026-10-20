@@ -1,4 +1,4 @@
-const STUDENT = { name: 'Sushruta Bera', reg: '24BAI0163', course: 'BCSE306L', title: 'Interactive 8-Puzzle Problem Solver using AI Search Algorithms' };
+const STUDENT = { name: 'Sushruta Bera', reg: '24BAI0163', course: 'Artificial Intelligence(BCSE306L)', title: 'Interactive 8-Puzzle Problem Solver using AI Search Algorithms' };
 const $ = id => document.getElementById(id);
 let start = '283164705', goal = '123804765', tl = [], idx = 0, timer = null, res = null;
 const cells = s => [...s].map(c => `<i class="${c === '0' ? 'z' : ''}">${c}</i>`).join('');
@@ -11,7 +11,7 @@ $('h-title').textContent = STUDENT.title; $('h-course').textContent = STUDENT.co
 const setGrid = (p, s) => $('g-' + p).querySelectorAll('input').forEach((e, i) => e.value = s[i] === '0' ? '_' : s[i]);
 const getGrid = p => { const v = [...$('g-' + p).querySelectorAll('input')].map(e => /^[_ 0]?$/.test(e.value) ? '0' : e.value).join(''); return v.length === 9 && [...'012345678'].every(c => v.includes(c)) ? v : null };
 const say = (t, err) => { $('msg').textContent = t; $('msg').className = 'msg' + (err ? ' err' : '') };
-function setPuzzle(s, g) { start = s; goal = g; setGrid('s', s); setGrid('g', g); $('m-s').innerHTML = cells(s); $('m-g').innerHTML = cells(g); $('demo').innerHTML = cells(s); stop(); tl = []; idx = 0; $('sum').classList.add('d-none'); place(s); $('phase').textContent = 'Current state' }
+function setPuzzle(s, g) { start = s; goal = g; setGrid('s', s); setGrid('g', g); $('m-s').innerHTML = cells(s); $('m-g').innerHTML = cells(g); $('demo').innerHTML = cells(s); $('demo2').innerHTML = cells(g); stop(); tl = []; idx = 0; $('sum').classList.add('d-none'); place(s); $('phase').textContent = 'Current state' }
 $('b-apply').onclick = () => { const s = getGrid('s'), g = getGrid('g'); if (!s || !g) return say('Each grid must contain every digit from 0 to 8 exactly once.', 1); if (!solvable(s, g)) return say('This start state cannot reach this goal. Swap any two tiles in one grid.', 1); setPuzzle(s, g); say('Puzzle set.') };
 $('b-rand').onclick = () => { const g = getGrid('g') || '123456780'; setPuzzle(randomPuzzle(g), g); say('Random solvable puzzle created.') };
 $('algo').onchange = () => { const a = $('algo').value; $('o-dls').classList.toggle('d-none', a !== 'dls'); $('o-h').classList.toggle('d-none', a !== 'gbfs' && a !== 'astar') };
