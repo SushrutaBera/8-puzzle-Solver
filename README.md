@@ -12,7 +12,7 @@ Uniform Cost Search (assigned, with 1 per move or tile number move cost). The sa
 Misplaced Tiles and Manhattan Distance (GBFS and A*).
 
 ## GitHub Pages URL
-https://github.com/SushrutaBera/8-puzzle-Solver
+https://sushrutabera.github.io/8-puzzle-Solver/
 
 ## Student Details
 Name: Sushruta Bera. Registration number: 24BAI0163.
