@@ -5,9 +5,9 @@
 
 // Edit these before submitting.
 const STUDENT = {
-  name: 'Sushruta Bera',
-  registration: '24BAI0163',
-  course: 'Artificial Intelligence (BCSE306L)',
+  name: 'YOUR NAME',
+  registration: 'YOUR REGISTRATION NUMBER',
+  course: 'Artificial Intelligence',
   title: 'Interactive 8-Puzzle Problem Solver using AI Search Algorithms'
 };
 
@@ -39,12 +39,7 @@ function formatValue(value) {
 }
 
 function currentOptions() {
-  return {
-    algorithm: $('algo').value,
-    depthLimit: $('limit').value,
-    heuristic: $('heur').value,
-    costMode: $('cost').value
-  };
+  return { costMode: $('cost').value };
 }
 
 /* ---------- Navigation and static text ---------- */
@@ -128,12 +123,6 @@ $('b-rand').onclick = () => {
   showMessage('Random solvable puzzle created.');
 };
 
-$('algo').onchange = () => {
-  const algorithm = $('algo').value;
-  $('o-dls').classList.toggle('d-none', algorithm !== 'dls');
-  $('o-h').classList.toggle('d-none', algorithm !== 'gbfs' && algorithm !== 'astar');
-};
-
 /* ---------- The sliding board ---------- */
 
 $('board').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -197,7 +186,6 @@ function walkBoardTo(frame) {
 /* ---------- Showing one frame ---------- */
 
 function showFrame(frame) {
-  const usesHeuristic = ['gbfs', 'astar'].includes($('algo').value);
   const walkMs = walkBoardTo(frame);
   $('cur').innerHTML = boardCells(frame.state);
   let rows;
@@ -210,7 +198,6 @@ function showFrame(frame) {
       ['Depth', frame.depth],
       ['Path cost g(n)', frame.g]
     ];
-    if (usesHeuristic) rows.push(['Heuristic h(n)', frame.h], ['Evaluation f(n)', frame.f]);
     rows.push(
       ['Nodes generated', frame.generated],
       ['Nodes expanded', frame.expanded],
@@ -220,7 +207,7 @@ function showFrame(frame) {
     $('kids').innerHTML = frame.successors.length
       ? frame.successors.map(child => `
           <div><div class="mini">${boardCells(child.state)}</div>
-          <div class="kid">g=${child.g}${usesHeuristic ? ` h=${child.h} f=${child.f}` : ''}</div></div>`).join('')
+          <div class="kid">g=${child.g}</div></div>`).join('')
       : '<span class="hint">No new successors.</span>';
     $('fr').innerHTML = frame.frontierPreview.map(text => `<li>${text}</li>`).join('') || '<li>empty</li>';
     $('ex').innerHTML = frame.recentlyExpanded.slice().reverse().map(text => `<li>${text}</li>`).join('');
@@ -274,7 +261,7 @@ function waitAfter(frame, walkMs) {
 
 function prepareRun() {
   stopPlayback();
-  result = search(startState, goalState, currentOptions());
+  result = uniformCostSearch(startState, goalState, currentOptions());
   timeline = result.trace.map(frame => ({ kind: 'search', ...frame }));
   result.path.forEach((step, i) => {
     timeline.push({ kind: 'path', index: i, state: step.state, node: step.node, g: step.g, tile: step.tile });
@@ -329,19 +316,24 @@ $('speed').oninput = () => { if (playTimer) startPlayback(); };
 
 /* ---------- Comparison page ---------- */
 
-const ALGORITHM_NAMES = { ucs: 'UCS', bfs: 'BFS', dfs: 'DFS', dls: 'DLS', iddls: 'IDDLS', gbfs: 'GBFS', astar: 'A*' };
+// Uniform Cost Search on the current puzzle under each move cost rule.
+const COST_RULES = [
+  { mode: 'uniform', label: 'UCS, 1 per move' },
+  { mode: 'tile', label: 'UCS, tile number per move' }
+];
 
 $('b-cmp').onclick = () => {
   $('cmpt').innerHTML = '<tr><td>Running...</td></tr>';
-  setTimeout(() => {      // let the "Running" text paint before the heavy work
-    const rows = Object.keys(ALGORITHM_NAMES).map(algorithm => {
-      const run = search(startState, goalState, { ...currentOptions(), algorithm });
+  setTimeout(() => {      // let the "Running" text paint before the work starts
+    const rows = COST_RULES.map(rule => {
+      const run = uniformCostSearch(startState, goalState, { costMode: rule.mode });
       const found = run.found ? 'Yes' : (run.capped ? 'No (limit)' : 'No');
-      return `<tr><td>${ALGORITHM_NAMES[algorithm]}</td><td>${found}</td><td>${run.expanded}</td><td>${run.generated}</td>
-        <td>${run.moves ?? '-'}</td><td>${run.pathCost ?? '-'}</td><td>${run.timeMs.toFixed(1)} ms</td><td>${run.memoryKb} KB</td></tr>`;
+      return `<tr><td>${rule.label}</td><td>${found}</td><td>${run.expanded}</td><td>${run.generated}</td>
+        <td>${run.moves ?? '-'}</td><td>${run.pathCost ?? '-'}</td><td>${run.maxDepth}</td>
+        <td>${run.timeMs.toFixed(1)} ms</td><td>${run.memoryKb} KB</td></tr>`;
     }).join('');
-    $('cmpt').innerHTML = `<tr><th>Algorithm</th><th>Solution found</th><th>Nodes expanded</th><th>Nodes generated</th>
-      <th>Moves</th><th>Path cost</th><th>Time</th><th>Memory</th></tr>` + rows;
+    $('cmpt').innerHTML = `<tr><th>Variant</th><th>Solution found</th><th>Nodes expanded</th><th>Nodes generated</th>
+      <th>Moves</th><th>Path cost</th><th>Max depth</th><th>Time</th><th>Memory</th></tr>` + rows;
   }, 30);
 };
 
