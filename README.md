@@ -18,7 +18,7 @@ None. Uniform Cost Search is an uninformed search and orders nodes by path cost 
 - Run, Pause, Resume, Next step, Previous step, Skip to solution, Reset and speed control
 - Solution summary with moves, nodes, depth, time, path cost and approximate memory
 - Comparison of Uniform Cost Search under the two cost rules
-- Reference notes on all the search methods in the course (only Uniform Cost Search is implemented)
+- Reference notes on all the search methods in the course (only Uniform Cost Search is implemented).
 
 ## Screenshots
 
