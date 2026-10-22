@@ -11,6 +11,12 @@ Uniform Cost Search (assigned, with 1 per move or tile number move cost). The sa
 ## Heuristics Used
 Misplaced Tiles and Manhattan Distance (GBFS and A*).
 
+## Screenshots
+
+![Home page](images/home.png)
+![Solving with Uniform Cost Search](images/solve.png)
+![Comparison table](images/compare.png)
+
 ## GitHub Pages URL
 https://sushrutabera.github.io/8-puzzle-Solver/
 

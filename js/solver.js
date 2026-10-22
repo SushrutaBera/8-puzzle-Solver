@@ -1,65 +1,301 @@
-const MOVES = [[1, 3], [0, 2, 4], [1, 5], [0, 4, 6], [1, 3, 5, 7], [2, 4, 8], [3, 7], [4, 6, 8], [5, 7]];
-const misplaced = (s, g) => { let d = 0; for (let i = 0; i < 9; i++)if (s[i] !== '0' && s[i] !== g[i]) d++; return d };
-const manhattan = (s, g) => { let d = 0; for (let i = 0; i < 9; i++)if (s[i] !== '0') { const j = g.indexOf(s[i]); d += Math.abs((i / 3 | 0) - (j / 3 | 0)) + Math.abs(i % 3 - j % 3) } return d };
-const HEUR = { misplaced, manhattan };
-function neighbors(s) { const z = s.indexOf('0'); return MOVES[z].map(j => { const a = s.split(''); a[z] = a[j]; a[j] = '0'; return { state: a.join(''), tile: +s[j] } }) }
-const inv = s => { let c = 0; const a = [...s].filter(x => x !== '0'); for (let i = 0; i < 8; i++)for (let j = i + 1; j < 8; j++)if (a[i] > a[j]) c++; return c % 2 };
-const solvable = (s, g) => inv(s) === inv(g);
-function randomPuzzle(goal) { let s = goal, prev = ''; for (let i = 0; i < 80; i++) { const n = neighbors(s).filter(x => x.state !== prev); prev = s; s = n[Math.random() * n.length | 0].state } return s }
-class Heap {
-    constructor() { this.a = [] } get size() { return this.a.length }
-    push(k, v) { const a = this.a; a.push({ k, v }); let i = a.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (a[p].k <= a[i].k) break;[a[p], a[i]] = [a[i], a[p]]; i = p } }
-    pop() { const a = this.a, top = a[0], last = a.pop(); if (a.length) { a[0] = last; let i = 0; for (; ;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < a.length && a[l].k < a[m].k) m = l; if (r < a.length && a[r].k < a[m].k) m = r; if (m === i) break;[a[m], a[i]] = [a[i], a[m]]; i = m } } return top.v }
+/*
+ * solver.js
+ * State model and search algorithms for the 8-puzzle.
+ *
+ * A state is a string of 9 digits read row by row. The digit '0' is the blank.
+ * Example: '283164705' is the board
+ *     2 8 3
+ *     1 6 4
+ *     7 0 5
+ */
+
+// For each square (0 to 8), the squares the blank can swap with.
+const NEIGHBOUR_SQUARES = [
+    [1, 3], [0, 2, 4], [1, 5],
+    [0, 4, 6], [1, 3, 5, 7], [2, 4, 8],
+    [3, 7], [4, 6, 8], [5, 7]
+];
+
+// Priorities are "cost * ID_SCALE + id", so equal costs leave the queue oldest first.
+const ID_SCALE = 1e7;
+
+/* ---------- Heuristics ---------- */
+
+// Number of tiles that are not on their goal square (the blank is ignored).
+function misplacedTiles(state, goal) {
+    let count = 0;
+    for (let square = 0; square < 9; square++) {
+        if (state[square] !== '0' && state[square] !== goal[square]) count++;
+    }
+    return count;
 }
 
-/* o: {algo, limit, heur, cost, cap}. Returns stats, path and a thinned trace of expansions. */
-function search(start, goal, o) {
-    const t0 = performance.now(), cap = o.cap || 150000;
-    const informed = o.algo === 'gbfs' || o.algo === 'astar', H = informed ? HEUR[o.heur] : () => 0;
-    const sc = t => o.cost === 'tile' ? t : 1;
-    let gen = 1, exp = 0, maxD = 0, peak = 1, capped = false, trace = [], stride = 1, tick = 0, closedSize = 0;
-    const run = (algo, limit) => {
-        trace = []; stride = 1; tick = 0; let n = 0; const recent = [];
-        const key = x => algo === 'bfs' ? x.id : (algo === 'dfs' || algo === 'dls') ? -x.id : (algo === 'ucs' ? x.g : algo === 'gbfs' ? x.h : x.f) * 1e7 + x.id;
-        const root = { state: start, parent: null, g: 0, d: 0, id: n++, h: H(start, goal) }; root.f = root.h;
-        const open = new Heap(), closed = new Set(), best = new Map([[start, 0]]); open.push(key(root), root);
-        const tree = algo === 'dls', weighted = algo === 'ucs' || algo === 'astar';
-        while (open.size) {
-            const x = open.pop();
-            if (!tree) { if (closed.has(x.state)) continue; closed.add(x.state) }
-            exp++; closedSize = closed.size; maxD = Math.max(maxD, x.d);
-            recent.push(x.state); if (recent.length > 6) recent.shift();
-            const kids = [];
-            if (x.state !== goal && !(algo === 'dls' && x.d >= limit) && exp < cap) {
-                for (const nb of neighbors(x.state)) {
-                    const g = x.g + sc(nb.tile);
-                    if (tree) { let bad = false; for (let a = x; a; a = a.parent)if (a.state === nb.state) { bad = true; break } if (bad) continue }
-                    else {
-                        if (closed.has(nb.state)) continue;
-                        if (weighted) { if (best.has(nb.state) && best.get(nb.state) <= g) continue } else if (best.has(nb.state)) continue;
-                        best.set(nb.state, g)
+// Sum of row distance plus column distance of every tile from its goal square.
+function manhattanDistance(state, goal) {
+    let total = 0;
+    for (let square = 0; square < 9; square++) {
+        if (state[square] === '0') continue;
+        const goalSquare = goal.indexOf(state[square]);
+        const rowGap = Math.abs(Math.floor(square / 3) - Math.floor(goalSquare / 3));
+        const colGap = Math.abs((square % 3) - (goalSquare % 3));
+        total += rowGap + colGap;
+    }
+    return total;
+}
+
+const HEURISTICS = { misplaced: misplacedTiles, manhattan: manhattanDistance };
+
+/* ---------- Puzzle helpers ---------- */
+
+// All states reachable in one move, with the number of the tile that slid.
+function getSuccessors(state) {
+    const blank = state.indexOf('0');
+    return NEIGHBOUR_SQUARES[blank].map(square => {
+        const tiles = state.split('');
+        tiles[blank] = tiles[square];
+        tiles[square] = '0';
+        return { state: tiles.join(''), tile: Number(state[square]) };
+    });
+}
+
+// Parity of inversions. Two states can reach each other only if parities match.
+function inversionParity(state) {
+    const tiles = [...state].filter(t => t !== '0');
+    let inversions = 0;
+    for (let i = 0; i < tiles.length; i++) {
+        for (let j = i + 1; j < tiles.length; j++) {
+            if (tiles[i] > tiles[j]) inversions++;
+        }
+    }
+    return inversions % 2;
+}
+
+function isSolvable(start, goal) {
+    return inversionParity(start) === inversionParity(goal);
+}
+
+// Walk away from the goal with random legal moves, so the result is always solvable.
+function generateRandomPuzzle(goal) {
+    let state = goal;
+    let previous = '';
+    for (let i = 0; i < 80; i++) {
+        const options = getSuccessors(state).filter(next => next.state !== previous);
+        previous = state;
+        state = options[Math.floor(Math.random() * options.length)].state;
+    }
+    return state;
+}
+
+/* ---------- Priority queue (binary min-heap) ---------- */
+
+class PriorityQueue {
+    constructor() { this.items = []; }
+
+    get size() { return this.items.length; }
+
+    push(priority, value) {
+        const items = this.items;
+        items.push({ priority, value });
+        let child = items.length - 1;
+        while (child > 0) {
+            const parent = (child - 1) >> 1;
+            if (items[parent].priority <= items[child].priority) break;
+            [items[parent], items[child]] = [items[child], items[parent]];
+            child = parent;
+        }
+    }
+
+    pop() {
+        const items = this.items;
+        const top = items[0];
+        const last = items.pop();
+        if (items.length > 0) {
+            items[0] = last;
+            let parent = 0;
+            while (true) {
+                const left = 2 * parent + 1;
+                const right = left + 1;
+                let smallest = parent;
+                if (left < items.length && items[left].priority < items[smallest].priority) smallest = left;
+                if (right < items.length && items[right].priority < items[smallest].priority) smallest = right;
+                if (smallest === parent) break;
+                [items[smallest], items[parent]] = [items[parent], items[smallest]];
+                parent = smallest;
+            }
+        }
+        return top.value;
+    }
+}
+
+/* ---------- Search ---------- */
+
+// Decides which frontier node is expanded next. Lower priority value goes first.
+function priorityOf(node, algorithm) {
+    switch (algorithm) {
+        case 'bfs': return node.id;                       // oldest first (queue)
+        case 'dfs':
+        case 'dls': return -node.id;                      // newest first (stack)
+        case 'ucs': return node.g * ID_SCALE + node.id;   // cheapest path so far
+        case 'gbfs': return node.h * ID_SCALE + node.id;  // closest to goal by heuristic
+        default: return node.f * ID_SCALE + node.id;      // A*: g + h
+    }
+}
+
+/*
+ * Runs one search and records what happened.
+ * options: { algorithm, depthLimit, heuristic, costMode, nodeCap }
+ *   algorithm: 'ucs' | 'bfs' | 'dfs' | 'dls' | 'iddls' | 'gbfs' | 'astar'
+ *   costMode:  'uniform' (every move costs 1) or 'tile' (a move costs the tile number)
+ */
+function search(startState, goalState, options) {
+    const startTime = performance.now();
+    const nodeCap = options.nodeCap || 150000;
+    const usesHeuristic = options.algorithm === 'gbfs' || options.algorithm === 'astar';
+    const heuristic = usesHeuristic ? HEURISTICS[options.heuristic] : () => 0;
+    const moveCost = tile => (options.costMode === 'tile' ? tile : 1);
+
+    // Counters shared by all passes (iterative deepening runs several passes).
+    let generated = 1;
+    let expanded = 0;
+    let maxDepth = 0;
+    let peakNodes = 1;
+    let capped = false;
+
+    // Recorded for the visualiser. Long runs are thinned so the list stays small.
+    let trace = [];
+    let traceStride = 1;
+    let expansionsSeen = 0;
+    let rootNode = null;
+
+    function runPass(algorithm, depthLimit) {
+        trace = [];
+        traceStride = 1;
+        expansionsSeen = 0;
+        let nextId = 0;
+        const recentlyExpanded = [];
+
+        const root = { state: startState, parent: null, tile: null, g: 0, depth: 0, id: nextId++, h: heuristic(startState, goalState) };
+        root.f = root.h;
+        rootNode = root;
+
+        const frontier = new PriorityQueue();
+        frontier.push(priorityOf(root, algorithm), root);
+        const explored = new Set();
+        const bestCost = new Map([[startState, 0]]);
+        const isTreeSearch = algorithm === 'dls';          // DLS only avoids loops along its own path
+        const mayImproveCost = algorithm === 'ucs' || algorithm === 'astar';
+
+        while (frontier.size > 0) {
+            const node = frontier.pop();
+
+            // A state can sit in the frontier more than once. Skip stale copies.
+            if (!isTreeSearch) {
+                if (explored.has(node.state)) continue;
+                explored.add(node.state);
+            }
+
+            expanded++;
+            maxDepth = Math.max(maxDepth, node.depth);
+            recentlyExpanded.push(node.state);
+            if (recentlyExpanded.length > 6) recentlyExpanded.shift();
+
+            const successors = [];
+            const isGoal = node.state === goalState;
+            const atDepthLimit = algorithm === 'dls' && node.depth >= depthLimit;
+
+            if (!isGoal && !atDepthLimit && expanded < nodeCap) {
+                for (const next of getSuccessors(node.state)) {
+                    const g = node.g + moveCost(next.tile);
+
+                    if (isTreeSearch) {
+                        if (isOnPathTo(node, next.state)) continue;
+                    } else {
+                        if (explored.has(next.state)) continue;
+                        const known = bestCost.get(next.state);
+                        if (known !== undefined && (!mayImproveCost || known <= g)) continue;
+                        bestCost.set(next.state, g);
                     }
-                    const k = { state: nb.state, tile: nb.tile, parent: x, g, d: x.d + 1, id: n++, h: H(nb.state, goal) }; k.f = k.g + k.h;
-                    kids.push(k); open.push(key(k), k); gen++;
+
+                    const child = { state: next.state, parent: node, tile: next.tile, g, depth: node.depth + 1, id: nextId++, h: heuristic(next.state, goalState) };
+                    child.f = child.g + child.h;
+                    successors.push(child);
+                    frontier.push(priorityOf(child, algorithm), child);
+                    generated++;
                 }
-                peak = Math.max(peak, open.size + closed.size);
+                peakNodes = Math.max(peakNodes, frontier.size + explored.size);
             }
-            if (++tick % stride === 0 || x.state === goal) {
-                trace.push({
-                    s: x.state, p: x.parent && x.parent.state, d: x.d, g: x.g, h: x.h, f: x.f, gen, exp, ex: closedSize, fs: open.size,
-                    kids: kids.map(k => ({ s: k.state, g: k.g, h: k.h, f: k.f })),
-                    fr: open.a.slice(0, 15).sort((a, b) => a.k - b.k).slice(0, 6).map(e => e.v.state + '  g=' + e.v.g + (informed ? ' h=' + e.v.h : '')), recent: recent.slice()
-                });
-                if (trace.length > 3000) { trace = trace.filter((_, i) => i % 2 === 0 || i === trace.length - 1); stride *= 2 }
+
+            expansionsSeen++;
+            if (expansionsSeen % traceStride === 0 || isGoal) {
+                trace.push(makeTraceFrame(node, successors, frontier, explored.size, recentlyExpanded));
+                if (trace.length > 1200) {           // keep every second frame, then record half as often
+                    trace = trace.filter((_, i) => i % 2 === 0 || i === trace.length - 1);
+                    traceStride *= 2;
+                }
             }
-            if (x.state === goal) return x;
-            if (exp >= cap) { capped = true; return null }
+
+            if (isGoal) return node;
+            if (expanded >= nodeCap) { capped = true; return null; }
         }
         return null;
+    }
+
+    function isOnPathTo(node, state) {
+        for (let n = node; n; n = n.parent) {
+            if (n.state === state) return true;
+        }
+        return false;
+    }
+
+    function makeTraceFrame(node, successors, frontier, exploredCount, recentlyExpanded) {
+        // Peek at the first 15 heap entries and sort them to show who is next in line.
+        const preview = frontier.items.slice(0, 15)
+            .sort((a, b) => a.priority - b.priority)
+            .slice(0, 6)
+            .map(entry => entry.value.state + '  g=' + entry.value.g + (usesHeuristic ? ' h=' + entry.value.h : ''));
+        return {
+            node,
+            state: node.state,
+            parentState: node.parent ? node.parent.state : null,
+            depth: node.depth, g: node.g, h: node.h, f: node.f,
+            generated, expanded,
+            exploredCount, frontierCount: frontier.size,
+            successors: successors.map(c => ({ state: c.state, g: c.g, h: c.h, f: c.f })),
+            frontierPreview: preview,
+            recentlyExpanded: recentlyExpanded.slice()
+        };
+    }
+
+    // Iterative deepening repeats depth limited passes with a growing limit.
+    let goalNode = null;
+    if (options.algorithm === 'iddls') {
+        for (let limit = 0; limit <= 40 && !goalNode && !capped; limit++) {
+            goalNode = runPass('dls', limit);
+        }
+    } else {
+        goalNode = runPass(options.algorithm, Number(options.depthLimit) || 0);
+    }
+
+    // Walk back from the goal to the root to get the solution path.
+    const path = [];
+    for (let n = goalNode; n; n = n.parent) {
+        path.push({ state: n.state, tile: n.tile, g: n.g, node: n });
+    }
+    path.reverse();
+
+    return {
+        found: goalNode !== null,
+        capped,
+        root: rootNode,
+        path,
+        trace,
+        generated,
+        expanded,
+        maxDepth,
+        peakNodes,
+        timeMs: performance.now() - startTime,
+        pathCost: goalNode ? goalNode.g : null,
+        moves: goalNode ? goalNode.depth : null,
+        memoryKb: Math.round(peakNodes * 110 / 1024)   // rough: about 110 bytes per stored node
     };
-    let end = null;
-    if (o.algo === 'iddls') { for (let L = 0; L <= 40 && !end && !capped; L++)end = run('dls', L) }
-    else end = run(o.algo, +o.limit || 0);
-    const path = []; for (let x = end; x; x = x.parent)path.push({ s: x.state, tile: x.tile, g: x.g }); path.reverse();
-    return { found: !!end, capped, path, trace, gen, exp, maxD, peak, ms: performance.now() - t0, cost: end ? end.g : null, moves: end ? end.d : null, kb: Math.round(peak * 110 / 1024) };
 }

@@ -304,7 +304,7 @@ h2 {
     width: 33.333%;
     height: 33.333%;
     padding: 3px;
-    transition: left .35s ease, top .35s ease
+    transition: left var(--slide, .35s) ease, top var(--slide, .35s) ease
 }
 
 .tile span {
