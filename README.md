@@ -48,5 +48,4 @@ Course: Artificial Intelligence (BCSE306L)
 1. Download or clone the repository.
 2. Open `index.html` in a browser, or use the VS Code Live Server extension.
 3. Open the Solve tab, enter a start and goal state or press Generate random puzzle, then press Run.
-
-To deploy, push the folder to GitHub and enable Pages from the `main` branch root.
+4. Use the link in the github pages
