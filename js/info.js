@@ -4,6 +4,7 @@
 const ALGORITHM_INFO = [
   {
     name: 'Uniform Cost Search (assigned)',
+    frontierOrder: 'Lowest g(n)',
     description: 'Expands the cheapest frontier node first, ordered by path cost g(n).',
     principle: 'Keeps a priority queue keyed on g(n) and expands the lowest. A cheaper route to a frontier state replaces the costlier one. The goal test happens when a node is expanded.',
     advantages: 'Finds the lowest cost solution for any non-negative step costs.',
@@ -15,6 +16,7 @@ const ALGORITHM_INFO = [
   },
   {
     name: 'Breadth First Search',
+    frontierOrder: 'Oldest first (FIFO)',
     description: 'Expands all nodes at depth d before depth d+1.',
     principle: 'FIFO queue. The shallowest node leaves the frontier first.',
     advantages: 'Shortest solution in moves.',
@@ -26,6 +28,7 @@ const ALGORITHM_INFO = [
   },
   {
     name: 'Depth First Search',
+    frontierOrder: 'Newest first (LIFO)',
     description: 'Follows one branch as deep as possible before backing up.',
     principle: 'LIFO stack with a seen set to avoid cycles.',
     advantages: 'Small frontier. Quick when solutions are deep and plentiful.',
@@ -37,6 +40,7 @@ const ALGORITHM_INFO = [
   },
   {
     name: 'Depth Limited Search',
+    frontierOrder: 'Newest first, depth capped',
     description: 'Depth First Search that refuses to go below a set depth.',
     principle: 'Stack with a depth cutoff and an ancestor check.',
     advantages: 'Bounded memory. Avoids endless descent.',
@@ -48,6 +52,7 @@ const ALGORITHM_INFO = [
   },
   {
     name: 'Iterative Deepening DLS',
+    frontierOrder: 'Newest first, cap grows each pass',
     description: 'Runs DLS with limits 0, 1, 2 and so on until the goal appears.',
     principle: 'Repeats depth limited searches. Early work is repeated but shallow levels are cheap.',
     advantages: 'BFS answer with DFS memory.',
@@ -59,6 +64,7 @@ const ALGORITHM_INFO = [
   },
   {
     name: 'Greedy Best First Search',
+    frontierOrder: 'Lowest h(n)',
     description: 'Always expands the node that looks closest to the goal by h(n).',
     principle: 'Priority queue ordered by h(n) only.',
     advantages: 'Fast when the heuristic is good.',
@@ -70,6 +76,7 @@ const ALGORITHM_INFO = [
   },
   {
     name: 'A* Search',
+    frontierOrder: 'Lowest f(n) = g(n) + h(n)',
     description: 'Expands the lowest f(n) = g(n) + h(n).',
     principle: 'Priority queue on f(n). Misplaced tiles and Manhattan distance never overestimate with 1 per move, so the result is optimal.',
     advantages: 'Optimal and usually far fewer expansions than uninformed search.',

@@ -5,9 +5,9 @@
 
 // Edit these before submitting.
 const STUDENT = {
-  name: 'YOUR NAME',
-  registration: 'YOUR REGISTRATION NUMBER',
-  course: 'Artificial Intelligence',
+  name: 'Sushruta Bera',
+  registration: '24BAI0163',
+  course: 'Artificial Intelligence (BCSE306L)',
   title: 'Interactive 8-Puzzle Problem Solver using AI Search Algorithms'
 };
 
@@ -336,6 +336,13 @@ $('b-cmp').onclick = () => {
       <th>Moves</th><th>Path cost</th><th>Max depth</th><th>Time</th><th>Memory</th></tr>` + rows;
   }, 30);
 };
+
+/* ---------- Properties table for every search method (reference only) ---------- */
+
+$('cmp-theory').innerHTML =
+  `<tr><th>Algorithm</th><th>Expands next</th><th>Time</th><th>Space</th><th>Complete</th><th>Optimal</th></tr>` +
+  ALGORITHM_INFO.map(info => `<tr><td>${info.name}</td><td>${info.frontierOrder}</td><td>${info.time}</td>
+    <td>${info.space}</td><td>${info.completeness}</td><td>${info.optimality}</td></tr>`).join('');
 
 /* ---------- Start up ---------- */
 
