@@ -27,4 +27,4 @@ Name: Sushruta Bera. Registration number: 24BAI0163.
 Russell and Norvig, Artificial Intelligence: A Modern Approach, chapter 3. Bootstrap documentation.
 
 ## How to Run the Project
-Open `index.html` in a browser. To deploy: push the folder to GitHub, then Settings, Pages, deploy from the main branch root.
+Open `index.html` in a browser. Or use the Github Pages link given above
