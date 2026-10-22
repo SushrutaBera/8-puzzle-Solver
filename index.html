@@ -82,8 +82,24 @@
           </div>
           <div class="panel">
             <h2>Algorithm</h2>
-            <p class="lbl">Search method</p>
-            <p class="fw-semibold mb-2">Uniform Cost Search</p><label class="lbl" for="cost">Move cost</label>
+            <label class="lbl" for="algo">Search method</label>
+            <select id="algo" class="form-select form-select-sm">
+              <option value="ucs" selected>Uniform Cost Search (assigned)</option>
+              <option value="bfs">BFS</option>
+              <option value="dfs">DFS</option>
+              <option value="dls">DLS</option>
+              <option value="iddls">IDDLS</option>
+              <option value="gbfs">Greedy Best First</option>
+              <option value="astar">A*</option>
+            </select>
+            <div id="o-dls" class="d-none mt-2"><label class="lbl" for="limit">Depth limit</label><input id="limit"
+                type="number" min="0" max="60" value="12" class="form-control form-control-sm"></div>
+            <div id="o-h" class="d-none mt-2"><label class="lbl" for="heur">Heuristic</label><select id="heur"
+                class="form-select form-select-sm">
+                <option value="manhattan">Manhattan distance</option>
+                <option value="misplaced">Misplaced tiles</option>
+              </select></div>
+            <label class="lbl mt-2" for="cost">Move cost</label>
             <select id="cost" class="form-select form-select-sm">
               <option value="uniform">1 per move</option>
               <option value="tile">Tile number</option>
@@ -148,19 +164,12 @@
     </section>
 
     <section id="compare" class="pg d-none">
-      <h2>Uniform Cost Search under two cost rules</h2>
-      <p class="prose">Runs Uniform Cost Search on the start and goal from the Solve page, once with a cost of 1 per
-        move and once with the tile number as the cost. Searches stop at 150,000 expanded nodes.</p>
+      <h2>Comparison on the current puzzle</h2>
+      <p class="prose">Runs every algorithm on the start and goal from the Solve page, with the same move cost,
+        heuristic and depth limit. Searches stop at 150,000 expanded nodes.</p>
       <button class="btn-go mb-3" id="b-cmp">Run comparison</button>
       <div class="table-responsive">
         <table class="cmp" id="cmpt"></table>
-      </div>
-      <h2 class="mt-5">Properties of all search methods</h2>
-      <p class="prose">Theory for each method on the 8-puzzle, where b is the branching factor, d the depth of the
-        shallowest solution, m the maximum depth, l the depth limit and C* the optimal cost. Only Uniform Cost Search is
-        implemented in this project, so no measured results are shown for the others.</p>
-      <div class="table-responsive">
-        <table class="cmp" id="cmp-theory"></table>
       </div>
     </section>
     <section id="info" class="pg d-none">
