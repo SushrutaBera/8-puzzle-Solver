@@ -12,9 +12,11 @@ Uniform Cost Search (assigned, with 1 per move or tile number move cost). The sa
 Misplaced Tiles and Manhattan Distance (GBFS and A*).
 
 ## Screenshots
-
+Home Page :
 ![Home page](images/home.png)
+Solve :
 ![Solving with Uniform Cost Search](images/solve.png)
+Compare :
 ![Comparison table](images/compare.png)
 
 ## GitHub Pages URL
