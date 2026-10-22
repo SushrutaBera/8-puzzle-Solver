@@ -1,6 +1,6 @@
 /*
  * solver.js
- * State model and search algorithms for the 8-puzzle.
+ * State model and Uniform Cost Search for the 8-puzzle.
  *
  * A state is a string of 9 digits read row by row. The digit '0' is the blank.
  * Example: '283164705' is the board
@@ -16,34 +16,8 @@ const NEIGHBOUR_SQUARES = [
     [3, 7], [4, 6, 8], [5, 7]
 ];
 
-// Priorities are "cost * ID_SCALE + id", so equal costs leave the queue oldest first.
+// Priority is "cost * ID_SCALE + id", so nodes with equal cost leave the queue oldest first.
 const ID_SCALE = 1e7;
-
-/* ---------- Heuristics ---------- */
-
-// Number of tiles that are not on their goal square (the blank is ignored).
-function misplacedTiles(state, goal) {
-    let count = 0;
-    for (let square = 0; square < 9; square++) {
-        if (state[square] !== '0' && state[square] !== goal[square]) count++;
-    }
-    return count;
-}
-
-// Sum of row distance plus column distance of every tile from its goal square.
-function manhattanDistance(state, goal) {
-    let total = 0;
-    for (let square = 0; square < 9; square++) {
-        if (state[square] === '0') continue;
-        const goalSquare = goal.indexOf(state[square]);
-        const rowGap = Math.abs(Math.floor(square / 3) - Math.floor(goalSquare / 3));
-        const colGap = Math.abs((square % 3) - (goalSquare % 3));
-        total += rowGap + colGap;
-    }
-    return total;
-}
-
-const HEURISTICS = { misplaced: misplacedTiles, manhattan: manhattanDistance };
 
 /* ---------- Puzzle helpers ---------- */
 
@@ -127,153 +101,100 @@ class PriorityQueue {
     }
 }
 
-/* ---------- Search ---------- */
-
-// Decides which frontier node is expanded next. Lower priority value goes first.
-function priorityOf(node, algorithm) {
-    switch (algorithm) {
-        case 'bfs': return node.id;                       // oldest first (queue)
-        case 'dfs':
-        case 'dls': return -node.id;                      // newest first (stack)
-        case 'ucs': return node.g * ID_SCALE + node.id;   // cheapest path so far
-        case 'gbfs': return node.h * ID_SCALE + node.id;  // closest to goal by heuristic
-        default: return node.f * ID_SCALE + node.id;      // A*: g + h
-    }
-}
+/* ---------- Uniform Cost Search ---------- */
 
 /*
- * Runs one search and records what happened.
- * options: { algorithm, depthLimit, heuristic, costMode, nodeCap }
- *   algorithm: 'ucs' | 'bfs' | 'dfs' | 'dls' | 'iddls' | 'gbfs' | 'astar'
- *   costMode:  'uniform' (every move costs 1) or 'tile' (a move costs the tile number)
+ * Expands the frontier node with the lowest path cost g(n) until the goal is expanded.
+ * options: { costMode, nodeCap }   (nodeCap defaults above the 181,440 reachable states)
+ *   costMode: 'uniform' (every move costs 1) or 'tile' (a move costs the number on the tile)
  */
-function search(startState, goalState, options) {
+function uniformCostSearch(startState, goalState, options) {
     const startTime = performance.now();
-    const nodeCap = options.nodeCap || 150000;
-    const usesHeuristic = options.algorithm === 'gbfs' || options.algorithm === 'astar';
-    const heuristic = usesHeuristic ? HEURISTICS[options.heuristic] : () => 0;
+    const nodeCap = options.nodeCap || 200000;
     const moveCost = tile => (options.costMode === 'tile' ? tile : 1);
 
-    // Counters shared by all passes (iterative deepening runs several passes).
     let generated = 1;
     let expanded = 0;
     let maxDepth = 0;
     let peakNodes = 1;
     let capped = false;
+    let nextId = 0;
 
     // Recorded for the visualiser. Long runs are thinned so the list stays small.
     let trace = [];
     let traceStride = 1;
-    let expansionsSeen = 0;
-    let rootNode = null;
+    const recentlyExpanded = [];
 
-    function runPass(algorithm, depthLimit) {
-        trace = [];
-        traceStride = 1;
-        expansionsSeen = 0;
-        let nextId = 0;
-        const recentlyExpanded = [];
+    const root = { state: startState, parent: null, tile: null, g: 0, depth: 0, id: nextId++ };
+    const frontier = new PriorityQueue();
+    frontier.push(root.g * ID_SCALE + root.id, root);
+    const explored = new Set();
+    const cheapestKnown = new Map([[startState, 0]]);   // best g found so far for each state
+    let goalNode = null;
 
-        const root = { state: startState, parent: null, tile: null, g: 0, depth: 0, id: nextId++, h: heuristic(startState, goalState) };
-        root.f = root.h;
-        rootNode = root;
+    while (frontier.size > 0) {
+        const node = frontier.pop();
 
-        const frontier = new PriorityQueue();
-        frontier.push(priorityOf(root, algorithm), root);
-        const explored = new Set();
-        const bestCost = new Map([[startState, 0]]);
-        const isTreeSearch = algorithm === 'dls';          // DLS only avoids loops along its own path
-        const mayImproveCost = algorithm === 'ucs' || algorithm === 'astar';
+        // A state can sit in the frontier more than once. Skip the stale copies.
+        if (explored.has(node.state)) continue;
+        explored.add(node.state);
 
-        while (frontier.size > 0) {
-            const node = frontier.pop();
+        expanded++;
+        maxDepth = Math.max(maxDepth, node.depth);
+        recentlyExpanded.push(node.state);
+        if (recentlyExpanded.length > 6) recentlyExpanded.shift();
 
-            // A state can sit in the frontier more than once. Skip stale copies.
-            if (!isTreeSearch) {
-                if (explored.has(node.state)) continue;
-                explored.add(node.state);
+        const isGoal = node.state === goalState;
+        const successors = [];
+
+        if (!isGoal && expanded < nodeCap) {
+            for (const next of getSuccessors(node.state)) {
+                if (explored.has(next.state)) continue;
+                const g = node.g + moveCost(next.tile);
+                const known = cheapestKnown.get(next.state);
+                if (known !== undefined && known <= g) continue;   // already have a route that is as cheap
+                cheapestKnown.set(next.state, g);
+
+                const child = { state: next.state, parent: node, tile: next.tile, g, depth: node.depth + 1, id: nextId++ };
+                successors.push(child);
+                frontier.push(child.g * ID_SCALE + child.id, child);
+                generated++;
             }
-
-            expanded++;
-            maxDepth = Math.max(maxDepth, node.depth);
-            recentlyExpanded.push(node.state);
-            if (recentlyExpanded.length > 6) recentlyExpanded.shift();
-
-            const successors = [];
-            const isGoal = node.state === goalState;
-            const atDepthLimit = algorithm === 'dls' && node.depth >= depthLimit;
-
-            if (!isGoal && !atDepthLimit && expanded < nodeCap) {
-                for (const next of getSuccessors(node.state)) {
-                    const g = node.g + moveCost(next.tile);
-
-                    if (isTreeSearch) {
-                        if (isOnPathTo(node, next.state)) continue;
-                    } else {
-                        if (explored.has(next.state)) continue;
-                        const known = bestCost.get(next.state);
-                        if (known !== undefined && (!mayImproveCost || known <= g)) continue;
-                        bestCost.set(next.state, g);
-                    }
-
-                    const child = { state: next.state, parent: node, tile: next.tile, g, depth: node.depth + 1, id: nextId++, h: heuristic(next.state, goalState) };
-                    child.f = child.g + child.h;
-                    successors.push(child);
-                    frontier.push(priorityOf(child, algorithm), child);
-                    generated++;
-                }
-                peakNodes = Math.max(peakNodes, frontier.size + explored.size);
-            }
-
-            expansionsSeen++;
-            if (expansionsSeen % traceStride === 0 || isGoal) {
-                trace.push(makeTraceFrame(node, successors, frontier, explored.size, recentlyExpanded));
-                if (trace.length > 1200) {           // keep every second frame, then record half as often
-                    trace = trace.filter((_, i) => i % 2 === 0 || i === trace.length - 1);
-                    traceStride *= 2;
-                }
-            }
-
-            if (isGoal) return node;
-            if (expanded >= nodeCap) { capped = true; return null; }
+            peakNodes = Math.max(peakNodes, frontier.size + explored.size);
         }
-        return null;
+
+        if (expanded % traceStride === 0 || isGoal) {
+            trace.push(makeTraceFrame(node, successors));
+            if (trace.length > 1200) {          // keep every second frame, then record half as often
+                trace = trace.filter((_, i) => i % 2 === 0 || i === trace.length - 1);
+                traceStride *= 2;
+            }
+        }
+
+        if (isGoal) { goalNode = node; break; }
+        if (expanded >= nodeCap) { capped = true; break; }
     }
 
-    function isOnPathTo(node, state) {
-        for (let n = node; n; n = n.parent) {
-            if (n.state === state) return true;
-        }
-        return false;
-    }
-
-    function makeTraceFrame(node, successors, frontier, exploredCount, recentlyExpanded) {
+    function makeTraceFrame(node, successors) {
         // Peek at the first 15 heap entries and sort them to show who is next in line.
-        const preview = frontier.items.slice(0, 15)
+        const nextInLine = frontier.items.slice(0, 15)
             .sort((a, b) => a.priority - b.priority)
             .slice(0, 6)
-            .map(entry => entry.value.state + '  g=' + entry.value.g + (usesHeuristic ? ' h=' + entry.value.h : ''));
+            .map(entry => entry.value.state + '  g=' + entry.value.g);
         return {
             node,
             state: node.state,
             parentState: node.parent ? node.parent.state : null,
-            depth: node.depth, g: node.g, h: node.h, f: node.f,
-            generated, expanded,
-            exploredCount, frontierCount: frontier.size,
-            successors: successors.map(c => ({ state: c.state, g: c.g, h: c.h, f: c.f })),
-            frontierPreview: preview,
+            depth: node.depth,
+            g: node.g,
+            generated,
+            expanded,
+            exploredCount: explored.size,
+            frontierCount: frontier.size,
+            successors: successors.map(child => ({ state: child.state, g: child.g })),
+            frontierPreview: nextInLine,
             recentlyExpanded: recentlyExpanded.slice()
         };
-    }
-
-    // Iterative deepening repeats depth limited passes with a growing limit.
-    let goalNode = null;
-    if (options.algorithm === 'iddls') {
-        for (let limit = 0; limit <= 40 && !goalNode && !capped; limit++) {
-            goalNode = runPass('dls', limit);
-        }
-    } else {
-        goalNode = runPass(options.algorithm, Number(options.depthLimit) || 0);
     }
 
     // Walk back from the goal to the root to get the solution path.
@@ -286,7 +207,7 @@ function search(startState, goalState, options) {
     return {
         found: goalNode !== null,
         capped,
-        root: rootNode,
+        root,
         path,
         trace,
         generated,
